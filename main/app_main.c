@@ -243,19 +243,21 @@ static void handle_rgb_bmp(http_context_t http_ctx, void* ctx)
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
     camera_sleep(0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(300 / portTICK_PERIOD_MS);
 
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
         ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
+        camera_sleep(1);
         return;
     }
-    camera_sleep(1);
-
+ 
     http_response_begin(http_ctx, 200, "image/jpeg", camera_get_data_size());
     http_response_set_header(http_ctx, "Content-disposition", "inline; filename=capture.jpg");
     write_frame(http_ctx);
     http_response_end(http_ctx);
+    camera_sleep(1);
+
 }
 
 
@@ -305,11 +307,12 @@ static void handle_rgb_bmp_stream(http_context_t http_ctx, void* ctx)
 static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
 {
     http_response_begin(http_ctx, 200, STREAM_CONTENT_TYPE, HTTP_RESPONSE_SIZE_UNKNOWN);
-
+    camera_sleep(0);
     while (true) {
         esp_err_t err = camera_run();
         if (err != ESP_OK) {
             ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
+            camera_sleep(1);
             return;
         }
         err = http_response_begin_multipart(http_ctx, "image/jpg",
@@ -327,6 +330,7 @@ static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
         }
     }
     http_response_end(http_ctx);
+    camera_sleep(1);
 }
 
 
