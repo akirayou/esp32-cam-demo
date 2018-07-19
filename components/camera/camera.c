@@ -431,7 +431,18 @@ esp_err_t camera_run()
     return ESP_OK;
 }
 esp_err_t camera_sleep(int enable){
-    if(0!=s_state->sensor.set_sleep(&s_state->sensor,enable))return -1;
+    if(!enable){
+        camera_config_t* config = &s_state->config;
+        /*
+        gpio_set_level(config->pin_reset, 0);
+        delay(10);
+        gpio_set_level(config->pin_reset, 1);
+        delay(10);*/
+        camera_enable_out_clock(config);//stop clock is effective?
+    }else{
+        camera_disable_out_clock();
+    }
+    //if(0!=s_state->sensor.set_sleep(&s_state->sensor,enable))return -1;
     return ESP_OK;
 }
 static esp_err_t dma_desc_init()

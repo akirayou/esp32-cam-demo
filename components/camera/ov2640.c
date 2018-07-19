@@ -716,10 +716,10 @@ static int set_sleep(sensor_t *sensor, int enable)
 {
     int ret=0;
     uint8_t reg;
-
     /* Switch to SENSOR register bank */
     ret |= SCCB_Write(sensor->slv_addr, BANK_SEL, BANK_SEL_SENSOR);
-
+    //slow fps reduce power??
+/*
     reg = SCCB_Read(sensor->slv_addr, COM2);
 
     if (enable) {
@@ -729,6 +729,7 @@ static int set_sleep(sensor_t *sensor, int enable)
     }
 
     ret |= SCCB_Write(sensor->slv_addr, COM2, reg);
+*/
     return ret;
 }
 int ov2640_init(sensor_t *sensor)
