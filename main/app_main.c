@@ -142,6 +142,7 @@ void app_main()
         ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
         return;
     }
+    //camera_sleep(1);
 
 #if EXAMPLE_ESP_WIFI_MODE_AP
     ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
@@ -240,11 +241,13 @@ static void handle_rgb_bmp(http_context_t http_ctx, void* ctx)
 
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
+    //camera_sleep(0);
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
         ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
         return;
     }
+    //camera_sleep(1);
 
     http_response_begin(http_ctx, 200, "image/jpeg", camera_get_data_size());
     http_response_set_header(http_ctx, "Content-disposition", "inline; filename=capture.jpg");

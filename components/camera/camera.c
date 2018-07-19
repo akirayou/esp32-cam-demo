@@ -419,7 +419,10 @@ esp_err_t camera_run()
 #endif // _NDEBUG
     i2s_run();
     ESP_LOGD(TAG, "Waiting for frame");
-    xSemaphoreTake(s_state->frame_ready, portMAX_DELAY);
+    if(! xSemaphoreTake(s_state->frame_ready,  500 / portTICK_PERIOD_MS)){
+        ESP_LOGE(TAG, "Timeout");
+        return ESP_ERR_INVALID_STATE;
+    }
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
     int time_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + (tv_end.tv_usec - tv_start.tv_usec) / 1000;
@@ -427,7 +430,10 @@ esp_err_t camera_run()
     s_state->frame_count++;
     return ESP_OK;
 }
-
+esp_err_t camera_sleep(int enable){
+    if(0!=s_state->sensor.set_sleep(&s_state->sensor,enable))return -1;
+    return ESP_OK;
+}
 static esp_err_t dma_desc_init()
 {
     assert(s_state->width % 4 == 0);

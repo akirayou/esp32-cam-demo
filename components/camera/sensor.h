@@ -129,6 +129,7 @@ typedef struct _sensor {
     int  (*set_hmirror)         (sensor_t *sensor, int enable);
     int  (*set_vflip)           (sensor_t *sensor, int enable);
     int  (*set_special_effect)  (sensor_t *sensor, sde_t sde);
+    int  (*set_sleep)           (sensor_t *sensor, int enable);
 } sensor_t;
 
 // Resolution table

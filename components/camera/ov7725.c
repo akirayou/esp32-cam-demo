@@ -279,6 +279,9 @@ static int set_vflip(sensor_t *sensor, int enable)
     // Write back register COM3
     return SCCB_Write(sensor->slv_addr, COM3, reg);
 }
+static int set_sleep(sensor_t *sensor, int enable){
+    return -1;//not implimented
+}
 
 int ov7725_init(sensor_t *sensor)
 {
@@ -292,7 +295,7 @@ int ov7725_init(sensor_t *sensor)
     sensor->set_exposure_ctrl = set_exposure_ctrl;
     sensor->set_hmirror = set_hmirror;
     sensor->set_vflip = set_vflip;
-
+    sensor->set_sleep=set_sleep;
     // Retrieve sensor's signature
     sensor->id.MIDH = SCCB_Read(sensor->slv_addr, REG_MIDH);
     sensor->id.MIDL = SCCB_Read(sensor->slv_addr, REG_MIDL);

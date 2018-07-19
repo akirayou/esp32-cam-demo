@@ -157,6 +157,11 @@ esp_err_t camera_run();
  */
 void camera_print_fb();
 
+/**
+ * @brief soft sleep mode only for ov2640
+ *
+ */
+esp_err_t camera_sleep(int enable);
 
 #ifdef __cplusplus
 }
