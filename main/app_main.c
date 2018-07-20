@@ -142,8 +142,7 @@ void app_main()
         ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
         return;
     }
-    camera_sleep(1);
-
+  
 #if EXAMPLE_ESP_WIFI_MODE_AP
     ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
     wifi_init_softap();
@@ -175,6 +174,11 @@ void app_main()
     }
     ESP_LOGI(TAG, "Free heap: %u", xPortGetFreeHeapSize());
     ESP_LOGI(TAG, "Camera demo ready");
+
+    //Some lead-in  time  is needed,to get stable image.
+    //Camera's gain controller needs about 30 frames.
+    //So I use Wifi-connection time as lead-in time.
+    camera_sleep(1); 
     gpio_set_level(CAMERA_LED_GPIO, 0);
 
 }
@@ -216,12 +220,14 @@ static void handle_grayscale_pgm(http_context_t http_ctx, void* ctx)
 
 static void handle_rgb_bmp(http_context_t http_ctx, void* ctx)
 {
+    camera_sleep(0);
+    vTaskDelay(10 / portTICK_PERIOD_MS);//skip a frame. 10ms is enough to start next frame??
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
         ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
         return;
     }
-
+    camera_sleep(1);
     bitmap_header_t* header = bmp_create_header(camera_get_fb_width(), camera_get_fb_height());
     if (header == NULL) {
         return;
@@ -242,21 +248,22 @@ static void handle_rgb_bmp(http_context_t http_ctx, void* ctx)
 
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
+    gpio_set_level(CAMERA_LED_GPIO, 1);
     camera_sleep(0);
-    vTaskDelay(300 / portTICK_PERIOD_MS);
+    vTaskDelay(10 / portTICK_PERIOD_MS);//skip a frame. 10ms is enough to start next frame??
 
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
         ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
         camera_sleep(1);
         return;
-    }
- 
+    } 
+    camera_sleep(1);
     http_response_begin(http_ctx, 200, "image/jpeg", camera_get_data_size());
     http_response_set_header(http_ctx, "Content-disposition", "inline; filename=capture.jpg");
     write_frame(http_ctx);
     http_response_end(http_ctx);
-    camera_sleep(1);
+    gpio_set_level(CAMERA_LED_GPIO, 0);
 
 }
 
@@ -272,8 +279,7 @@ static void handle_rgb_bmp_stream(http_context_t http_ctx, void* ctx)
             .data = header,
             .size = sizeof(*header)
     };
-
-
+    camera_sleep(0);
     while (true) {
         esp_err_t err = camera_run();
         if (err != ESP_OK) {
@@ -299,13 +305,14 @@ static void handle_rgb_bmp_stream(http_context_t http_ctx, void* ctx)
             break;
         }
     }
-
+    camera_sleep(1);
     free(header);
     http_response_end(http_ctx);
 }
 
 static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
 {
+    //gpio_set_level(CAMERA_LED_GPIO, 1);
     http_response_begin(http_ctx, 200, STREAM_CONTENT_TYPE, HTTP_RESPONSE_SIZE_UNKNOWN);
     camera_sleep(0);
     while (true) {
@@ -331,6 +338,7 @@ static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
     }
     http_response_end(http_ctx);
     camera_sleep(1);
+    //gpio_set_level(CAMERA_LED_GPIO, 0);
 }
 
 

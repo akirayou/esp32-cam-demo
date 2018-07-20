@@ -432,17 +432,14 @@ esp_err_t camera_run()
 }
 esp_err_t camera_sleep(int enable){
     if(!enable){
+        //Only in OV2640?  Unofficial method of  power save. 
+        //May be you have to wake up [camera_sleep(0)] some time span.
+        //In my test sevral minuts sleep is OK. But I do not know the time span.
         camera_config_t* config = &s_state->config;
-        /*
-        gpio_set_level(config->pin_reset, 0);
-        delay(10);
-        gpio_set_level(config->pin_reset, 1);
-        delay(10);*/
-        camera_enable_out_clock(config);//stop clock is effective?
+        camera_enable_out_clock(config);
     }else{
         camera_disable_out_clock();
     }
-    //if(0!=s_state->sensor.set_sleep(&s_state->sensor,enable))return -1;
     return ESP_OK;
 }
 static esp_err_t dma_desc_init()

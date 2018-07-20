@@ -2,16 +2,28 @@
 
 Code provided in this repository gets the image from camera and prints it out as ASCII art to the serial port.
 
-## Build Status
+#CTF:power save test
+CAUTION:This is forked version. not original.
+I add camera_sleep function. It stops Xclk.
+Please see app_main.c usage.
 
-[![Build Status](https://travis-ci.org/igrr/esp32-cam-demo.svg?branch=master)](https://travis-ci.org/igrr/esp32-cam-demo)
+I want to save power a little bit.Because M5Cam board is very hot.
+I tried to use SCCB stand by mode (by COM2 register). But it needs reset and reinitialize.
+So I want to try another way.
+
+
+Known Issue.
+Long sleep makes image darkder. It may be caused by gain controller get over exposed frame. 
+So you need some lead-in frame (just cameara_sleep(0) and wait some frames) and periodic wake up.
+I don't know the optimal number of these frames.
+
 
 ## Table of Contents
 - [ESP32 Camera Demo](#esp32-camera-demo)
   - [Build Status](#build-status)
   - [Table of Contents](#table-of-contents)
   - [Components](#components)
-    - [ESP32](#esp32)
+    - [ESP32](#esp32)1
     - [Camera](#camera)
     - [ESP-IDF](#esp-idf)
   - [Quick Start](#quick-start)

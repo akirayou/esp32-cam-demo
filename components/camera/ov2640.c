@@ -712,26 +712,7 @@ static int set_vflip(sensor_t *sensor, int enable)
     ret |= SCCB_Write(sensor->slv_addr, REG04, reg);
     return ret;
 }
-static int set_sleep(sensor_t *sensor, int enable)
-{
-    int ret=0;
-    uint8_t reg;
-    /* Switch to SENSOR register bank */
-    ret |= SCCB_Write(sensor->slv_addr, BANK_SEL, BANK_SEL_SENSOR);
-    //slow fps reduce power??
-/*
-    reg = SCCB_Read(sensor->slv_addr, COM2);
 
-    if (enable) {
-        reg |= 0x10;
-    } else {
-        reg &= ~0x10;
-    }
-
-    ret |= SCCB_Write(sensor->slv_addr, COM2, reg);
-*/
-    return ret;
-}
 int ov2640_init(sensor_t *sensor)
 {
     /* set function pointers */
@@ -750,7 +731,6 @@ int ov2640_init(sensor_t *sensor)
     sensor->set_whitebal = set_whitebal;
     sensor->set_hmirror = set_hmirror;
     sensor->set_vflip = set_vflip;
-    sensor->set_sleep = set_sleep;
     // Set sensor flags
     SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_VSYNC, 1);
     SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_HSYNC, 0);
