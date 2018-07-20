@@ -2,7 +2,7 @@
 
 Code provided in this repository gets the image from camera and prints it out as ASCII art to the serial port.
 
-#CTF:power save test
+# CTF:power save test
 CAUTION:This is forked version. not original.
 I add camera_sleep function. It stops Xclk.
 Please see app_main.c usage.
