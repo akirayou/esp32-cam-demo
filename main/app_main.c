@@ -153,6 +153,7 @@ void app_main()
 
     http_server_t server;
     http_server_options_t http_options = HTTP_SERVER_OPTIONS_DEFAULT();
+    http_options.task_priority=10;// handling camera data must be high priority
     ESP_ERROR_CHECK( http_server_start(&http_options, &server) );
 
     if (s_pixel_format == CAMERA_PF_GRAYSCALE) {
@@ -250,7 +251,7 @@ static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
     gpio_set_level(CAMERA_LED_GPIO, 1);
     camera_sleep(0);
-    vTaskDelay(10 / portTICK_PERIOD_MS);//skip a frame. 10ms is enough to start next frame??
+    for(int i=0;i<2;i++)wait_vsync();
 
     esp_err_t err = camera_run();
     if (err != ESP_OK) {

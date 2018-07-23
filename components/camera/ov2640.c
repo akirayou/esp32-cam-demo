@@ -212,7 +212,8 @@ static const uint8_t svga_regs[][2] = {
         { BANK_SEL, BANK_SEL_SENSOR },
         /* DSP input image resoultion and window size control */
         { COM7,    COM7_RES_SVGA},
-        { COM1,    0x0F }, /* UXGA=0x0F, SVGA=0x0A, CIF=0x06 */
+        { 0x0f,    0x4b }, /*only in auto frame rate mode*/
+        { COM1,    0x0A+0xc0 }, /* UXGA=0x0F, SVGA=0x0A, CIF=0x06  +add 0xc0  when use auto framerate mode */
         { REG32,   0x09 }, /* UXGA=0x36, SVGA/CIF=0x09 */
 
         { HSTART,  0x11 }, /* UXGA=0x11, SVGA/CIF=0x11 */
@@ -221,7 +222,7 @@ static const uint8_t svga_regs[][2] = {
         { VSTART,  0x00 }, /* UXGA=0x01, SVGA/CIF=0x00 */
         { VSTOP,   0x4b }, /* UXGA=0x97, SVGA/CIF=0x4b */
         { 0x3d,    0x38 }, /* UXGA=0x34, SVGA/CIF=0x38 */
-
+        /*undocmented register */
         { 0x35,    0xda },
         { 0x22,    0x1a },
         { 0x37,    0xc3 },
@@ -460,10 +461,10 @@ static int set_framesize(sensor_t *sensor, framesize_t framesize)
     const uint8_t (*regs)[2];
     
     if (framesize <= FRAMESIZE_SVGA) {
-        clkrc =0x83;
+        clkrc =0x83; //clock doubler and div by 4 = xclk/2
         regs = svga_regs;
     } else {
-        clkrc =0x87;
+        clkrc =0x87;  //clock doubler and div by 8 =xclk/4
         regs = uxga_regs;
     }
     

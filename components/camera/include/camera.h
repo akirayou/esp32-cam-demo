@@ -162,6 +162,7 @@ void camera_print_fb();
  *
  */
 esp_err_t camera_sleep(int enable);
+void wait_vsync();
 
 #ifdef __cplusplus
 }

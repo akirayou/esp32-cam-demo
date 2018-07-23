@@ -103,15 +103,37 @@ static size_t i2s_bytes_per_sample(i2s_sampling_mode_t mode)
             return 0;
     }
 }
-
+typedef enum {
+    VSYNC_WAIT_NONE,
+    VSYNC_WAIT_TRANS,
+    VSYNC_WAIT_POS
+} vsync_wait_mode_t;
+vsync_wait_mode_t vsync_wait_mode;
 static void vsync_intr_disable()
 {
+    vsync_wait_mode=VSYNC_WAIT_NONE;
     gpio_set_intr_type(s_state->config.pin_vsync, GPIO_INTR_DISABLE);
 }
 
 static void vsync_intr_enable()
 {
+    if(vsync_wait_mode!=VSYNC_WAIT_NONE){
+        ESP_LOGE(TAG,"invalid state in vsync_intr_enable");
+    }
+    vsync_wait_mode=VSYNC_WAIT_TRANS;
     gpio_set_intr_type(s_state->config.pin_vsync, GPIO_INTR_NEGEDGE);
+}
+static void vsync_wait_posedge()
+{
+    if(vsync_wait_mode!=VSYNC_WAIT_NONE){
+        ESP_LOGE(TAG,"invalid state in vsync_wait_posedge");
+    }
+    vsync_wait_mode=VSYNC_WAIT_POS;
+    gpio_set_intr_type(s_state->config.pin_vsync, GPIO_INTR_POSEDGE);
+    if(! xSemaphoreTake(s_state->frame_ready,  5000 / portTICK_PERIOD_MS)){
+        ESP_LOGE(TAG, "Timeout in vsync_wait_posedge");
+    }
+    vsync_intr_disable();
 }
 
 
@@ -329,6 +351,8 @@ esp_err_t camera_init(const camera_config_t* config)
     }
 
     // skip at least one frame after changing camera settings
+    for(int i=0;i<2;i++)wait_vsync();
+    /*
     while (gpio_get_level(s_state->config.pin_vsync) == 0) {
         ;
     }
@@ -337,7 +361,7 @@ esp_err_t camera_init(const camera_config_t* config)
     }
     while (gpio_get_level(s_state->config.pin_vsync) == 0) {
         ;
-    }
+    }*/
     s_state->frame_count = 0;
     ESP_LOGD(TAG, "Init done");
     return ESP_OK;
@@ -419,7 +443,7 @@ esp_err_t camera_run()
 #endif // _NDEBUG
     i2s_run();
     ESP_LOGD(TAG, "Waiting for frame");
-    if(! xSemaphoreTake(s_state->frame_ready,  500 / portTICK_PERIOD_MS)){
+    if(! xSemaphoreTake(s_state->frame_ready,  5000 / portTICK_PERIOD_MS)){
         ESP_LOGE(TAG, "Timeout");
         return ESP_ERR_INVALID_STATE;
     }
@@ -620,7 +644,17 @@ static void i2s_stop()
     BaseType_t higher_priority_task_woken;
     xQueueSendFromISR(s_state->data_ready, &val, &higher_priority_task_woken);
 }
-
+void wait_vsync()
+{
+    /*
+    while (gpio_get_level(s_state->config.pin_vsync) == 0) {
+        ;
+    }
+    while (gpio_get_level(s_state->config.pin_vsync) != 0) {
+        ;
+    }*/
+    vsync_wait_posedge();
+}
 static void i2s_run()
 {
 #ifndef _NDEBUG
@@ -634,9 +668,12 @@ static void i2s_run()
 
     // wait for vsync
     ESP_LOGD(TAG, "Waiting for positive edge on VSYNC");
+    vsync_wait_posedge();
+    /*
     while (gpio_get_level(s_state->config.pin_vsync) == 0) {
-        ;
-    }
+        vTaskDelay(1);
+    }*/
+    //May be very accurate timming is needed. (ISR and semapho is not good here)
     while (gpio_get_level(s_state->config.pin_vsync) != 0) {
         ;
     }
@@ -655,6 +692,11 @@ static void i2s_run()
     I2S0.int_clr.val = I2S0.int_raw.val;
     I2S0.int_ena.val = 0;
     I2S0.int_ena.in_done = 1;
+
+
+
+
+    
     esp_intr_enable(s_state->i2s_intr_handle);
     if (s_state->config.pixel_format == CAMERA_PF_JPEG) {
         vsync_intr_enable();
@@ -692,15 +734,23 @@ static void IRAM_ATTR i2s_isr(void* arg)
 
 static void IRAM_ATTR gpio_isr(void* arg)
 {
-    bool need_yield = false;
-    ESP_EARLY_LOGV(TAG, "gpio isr, cnt=%d", s_state->dma_received_count);
-    if (gpio_get_level(s_state->config.pin_vsync) == 0 &&
-            s_state->dma_received_count > 0 &&
-            !s_state->dma_done) {
-        signal_dma_buf_received(&need_yield);
-        i2s_stop();
+    if(vsync_wait_mode == VSYNC_WAIT_TRANS){
+        bool need_yield = false;
+        ESP_EARLY_LOGV(TAG, "gpio isr, cnt=%d", s_state->dma_received_count);
+        if (gpio_get_level(s_state->config.pin_vsync) == 0 &&
+                s_state->dma_received_count > 0 &&
+                !s_state->dma_done) {
+            signal_dma_buf_received(&need_yield);
+            i2s_stop();
+        }
+        if (need_yield) {
+            portYIELD_FROM_ISR();
+        }
     }
-    if (need_yield) {
+    if(vsync_wait_mode==VSYNC_WAIT_POS ){
+        BaseType_t isHigherTask;
+        xSemaphoreGiveFromISR(s_state->frame_ready,&isHigherTask);
+        //if(isHigherTask)
         portYIELD_FROM_ISR();
     }
 }
