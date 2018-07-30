@@ -96,9 +96,9 @@ static int decodeToImage(unsigned char *pImage)
     return 0;
 }
 unsigned char g_img[F_WIDTH * F_HEIGHT];
-static float g_s[F_WIDTH * F_HEIGHT];// 4  * sigma ** 2  value,it Means 256=  8 sigma
-static float g_mu[F_WIDTH * F_HEIGHT];
-static float g_v[F_WIDTH * F_HEIGHT];
+static char g_s[F_WIDTH * F_HEIGHT];// 4  * sigma ** 2  value,it Means 256=  8 sigma
+static char g_mu[F_WIDTH * F_HEIGHT];
+static char g_v[F_WIDTH * F_HEIGHT];
 void detect_move_init(void)
 {
 

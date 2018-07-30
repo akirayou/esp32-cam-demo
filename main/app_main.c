@@ -81,7 +81,7 @@ bool main_loop(void){
     TickType_t waitTick=1000/portTICK_PERIOD_MS-tickFromLast;
     if(waitTick<1000/portTICK_PERIOD_MS)vTaskDelay(waitTick);
 
-
+    /*
     uint8_t isDetect=0;
     taskENTER_CRITICAL(&cameraMutex);
     gpio_set_level(CAMERA_LED_GPIO, 1);
@@ -101,7 +101,7 @@ bool main_loop(void){
         ESP_LOGI(TAG,"Detect: max_s %f",max_s);
     }
     taskEXIT_CRITICAL(&cameraMutex);
-
+*/
 
     return true;
 }
@@ -183,6 +183,7 @@ void app_main()
     http_server_t server;
     http_server_options_t http_options = HTTP_SERVER_OPTIONS_DEFAULT();
     http_options.task_priority=10;// handling camera data must be high priority
+    http_options.task_stack_size=4096;
     ESP_ERROR_CHECK( http_server_start(&http_options, &server) );
     assert(s_pixel_format == CAMERA_PF_JPEG);
 
@@ -218,7 +219,7 @@ static esp_err_t write_frame(http_context_t http_ctx)
 
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
-    taskENTER_CRITICAL(&cameraMutex);
+    //taskENTER_CRITICAL(&cameraMutex);
     gpio_set_level(CAMERA_LED_GPIO, 1);
     camera_sleep(0);
     for(int i=0;i<2;i++)wait_vsync();//skip 2frames to get sable frame
@@ -235,7 +236,7 @@ static void handle_jpg(http_context_t http_ctx, void* ctx)
         http_response_end(http_ctx);
         gpio_set_level(CAMERA_LED_GPIO, 0);
     }
-    taskEXIT_CRITICAL(&cameraMutex);
+    //taskEXIT_CRITICAL(&cameraMutex);
 }
 
 static void handle_jpg_stream(http_context_t http_ctx, void* ctx)

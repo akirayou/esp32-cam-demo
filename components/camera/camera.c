@@ -316,7 +316,7 @@ esp_err_t camera_init(const camera_config_t* config)
     ESP_LOGD(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
     s_state->fb = (uint8_t*) calloc(s_state->fb_size, 1);
     if (s_state->fb == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate frame buffer");
+        ESP_LOGE(TAG, "Failed to allocate frame buffer, size %d",s_state->fb_size);
         err = ESP_ERR_NO_MEM;
         goto fail;
     }
