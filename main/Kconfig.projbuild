@@ -7,6 +7,18 @@ config UPLOAD_URL
     help
 	upload jpg file when move deteciton 
 
+config MAX_S_THRESH
+    int "Max_S"
+    default 700
+    help
+	threshold of move detect.
+
+config STATIC_FB
+    int "FB size(0 is by dynamic)"
+    default 0
+    help
+	To avoid memory fragmentation. You can allcate memory as global value.
+
 choice ESP_WIFI_MODE
     prompt "AP or STA"
     default ESP_WIFI_IS_SOFTAP

@@ -313,13 +313,20 @@ esp_err_t camera_init(const camera_config_t* config)
             s_state->fb_size, s_state->sampling_mode,
             s_state->width, s_state->height);
 
-    ESP_LOGD(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
+    #if CONFIG_STATIC_FB == 0
+    ESP_LOGI(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
     s_state->fb = (uint8_t*) calloc(s_state->fb_size, 1);
     if (s_state->fb == NULL) {
         ESP_LOGE(TAG, "Failed to allocate frame buffer, size %d",s_state->fb_size);
         err = ESP_ERR_NO_MEM;
         goto fail;
     }
+    #else
+    __NOINIT_ATTR  static uint8_t dummy_fb[CONFIG_STATIC_FB];
+    assert(CONFIG_STATIC_FB==s_state->fb_size);
+    s_state->fb=dummy_fb;
+    for(int i=0;i<CONFIG_STATIC_FB;i++)dummy_fb[i]=0;
+    #endif
 
     ESP_LOGD(TAG, "Initializing I2S and DMA");
     i2s_init();
@@ -391,7 +398,9 @@ esp_err_t camera_deinit()
         esp_intr_free(s_state->i2s_intr_handle);
     }
     dma_desc_deinit();
+    #if CONFIG_STATIC_FB == 0
     free(s_state->fb);
+    #endif
     free(s_state);
     s_state = NULL;
     camera_disable_out_clock();

@@ -34,7 +34,7 @@
 #include "bitmap.h"
 #include "http_server.h"
 #include "move_detect.h"
-
+#define USE_SLEEP 0
 /* The examples use simple WiFi configuration that you can set via
    'make menuconfig'.
 
@@ -109,7 +109,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
             ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
             if (!esp_http_client_is_chunked_response(evt->client)) {
                 // Write out data
-                // printf("%.*s", evt->data_len, (char*)evt->data);
+                 printf("%.*s", evt->data_len, (char*)evt->data);
             }
 
             break;
@@ -158,19 +158,25 @@ bool main_loop(void){
 
     uint8_t isDetect=0;
     cameraLock();
+#if USE_SLEEP
     camera_sleep(0);
-    for(int i=0;i<2;i++)wait_vsync();//skip 2frames to get sable frame
-
+    for(int i=0;i<2;i++)wait_vsync();//skip some frames to get sable frame
+#endif
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
-        ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
+        ESP_LOGE(TAG, "Camera capture failed with error = %d", err);
+#if USE_SLEEP
         camera_sleep(1);
+#endif
     }else{ 
+#if USE_SLEEP
         camera_sleep(1);
+#endif
         uint8_t *jpgData = camera_get_fb();
         size_t jpgSize = camera_get_data_size();
-        short max_s;
-        isDetect=detect_move(jpgData,jpgSize,&max_s); 
+        unsigned short max_s;
+        max_s=detect_move(jpgData,jpgSize);
+        isDetect = max_s>CONFIG_MAX_S_THRESH; 
         ESP_LOGI(TAG,"Detect: max_s %d",max_s);
         if(isDetect){
             ESP_LOGI(TAG,"Move !\n");
@@ -241,7 +247,8 @@ void app_main()
         ESP_LOGE(TAG, "Camera not supported");
         return;
     }
-
+   
+    ESP_LOGI(TAG, "Free heap: %u  and lagest is %d", xPortGetFreeHeapSize(),heap_caps_get_largest_free_block(MALLOC_CAP_32BIT ) );
     camera_config.pixel_format = s_pixel_format;
     err = camera_init(&camera_config);
     if (err != ESP_OK) {
@@ -257,26 +264,31 @@ void app_main()
     wifi_init_sta();
 #endif
 
+    //Some lead-in  time  is needed,to get stable image.
+    //Camera's gain controller needs about 30 frames.
+    //So I use Wifi-connection time as lead-in time.
+    assert(s_pixel_format == CAMERA_PF_JPEG);
+    for(int i=0;i<10;i++)wait_vsync();//skip soe frames to get sable frame
+#if USE_SLEEP
+    camera_sleep(1); 
+#endif
     http_server_t server;
     http_server_options_t http_options = HTTP_SERVER_OPTIONS_DEFAULT();
     http_options.task_priority=10;// handling camera data must be high priority
-    http_options.task_stack_size=4096;
+    http_options.task_stack_size=2048;
     ESP_ERROR_CHECK( http_server_start(&http_options, &server) );
-    assert(s_pixel_format == CAMERA_PF_JPEG);
 
     ESP_ERROR_CHECK( http_register_handler(server, "/jpg", HTTP_GET, HTTP_HANDLE_RESPONSE, &handle_jpg, NULL) );
     ESP_LOGI(TAG, "Open http://" IPSTR "/jpg for single image/jpg image", IP2STR(&s_ip_addr));
     ESP_ERROR_CHECK( http_register_handler(server, "/jpg_stream", HTTP_GET, HTTP_HANDLE_RESPONSE, &handle_jpg_stream, NULL) );
     ESP_LOGI(TAG, "Open http://" IPSTR "/jpg_stream for multipart/x-mixed-replace stream of JPEGs", IP2STR(&s_ip_addr));
     ESP_ERROR_CHECK( http_register_handler(server, "/", HTTP_GET, HTTP_HANDLE_RESPONSE, &handle_jpg_stream, NULL) );
-    ESP_LOGI(TAG, "Free heap: %u", xPortGetFreeHeapSize());
     ESP_LOGI(TAG, "Camera demo ready");
-
-    //Some lead-in  time  is needed,to get stable image.
-    //Camera's gain controller needs about 30 frames.
-    //So I use Wifi-connection time as lead-in time.
-    camera_sleep(1); 
     gpio_set_level(CAMERA_LED_GPIO, 0);
+
+    
+    detect_move_init();
+    
     while(main_loop());
 
 }
@@ -297,15 +309,20 @@ static esp_err_t write_frame(http_context_t http_ctx)
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
     cameraLock();
+#if USE_SLEEP
     camera_sleep(0);
-    for(int i=0;i<2;i++)wait_vsync();//skip 2frames to get sable frame
-
+    for(int i=0;i<1;i++)wait_vsync();//skip soe frames to get sable frame
+#endif
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
         ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
+#if USE_SLEEP
         camera_sleep(1);
+#endif
     }else{ 
+#if USE_SLEEP
         camera_sleep(1);
+#endif
         http_response_begin(http_ctx, 200, "image/jpeg", camera_get_data_size());
         http_response_set_header(http_ctx, "Content-disposition", "inline; filename=capture.jpg");
         write_frame(http_ctx);

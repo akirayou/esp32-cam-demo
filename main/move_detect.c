@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <math.h>
 #include "move_detect.h"
+const char *TAG="move_detect";
 #ifndef max
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
@@ -95,10 +96,11 @@ static int decodeToImage(unsigned char *pImage)
     }
     return 0;
 }
+#if 0
 unsigned char g_img[F_WIDTH * F_HEIGHT];
 static signed char g_s[F_WIDTH * F_HEIGHT];//  sigma ** 2  value,it Means 128=  +/- 11 sigma
-static short g_mu[F_WIDTH * F_HEIGHT];//average of  g_img*16 value    
-static float g_v[F_WIDTH * F_HEIGHT];
+static unsigned short g_mu[F_WIDTH * F_HEIGHT];//average of  g_img*16 value    
+static unsigned short g_v[F_WIDTH * F_HEIGHT];
 void detect_move_init(void)
 {
 
@@ -107,34 +109,62 @@ void detect_move_init(void)
         g_v[i]=10;
     }
 }
-unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,short *out_max_s)
+#else 
+unsigned char *g_img;
+static signed char *g_s;//  sigma ** 2  value,it Means 128=  +/- 11 sigma
+static unsigned short *g_mu;//average of  g_img*16 value    
+static unsigned short *g_v;// variance*16
+void detect_move_init(void)
+{
+    ESP_LOGI(TAG,"alloc memory");
+    g_img=malloc(F_WIDTH*F_HEIGHT*sizeof(char));
+    if(!g_img)ESP_LOGE(TAG,"malloc g_img");
+    g_s =malloc(F_WIDTH*F_HEIGHT*sizeof(char));
+    if(!g_s)ESP_LOGE(TAG,"malloc g_s");
+    g_mu=malloc(F_WIDTH*F_HEIGHT*sizeof(short));
+    if(!g_mu)ESP_LOGE(TAG,"malloc g_mu");
+    g_v =malloc(F_WIDTH*F_HEIGHT*sizeof(short));
+    if(!g_v)ESP_LOGE(TAG,"malloc g_v");
+    
+
+    for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
+        g_mu[i]=g_img[i];
+        g_v[i]=10*16;
+    }
+}
+
+#endif
+unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
 {
     g_nInFileOfs = 0;
     g_nInFileSize=jpgSize;
     g_jpgData=jpgData;
 
     if(decodeToImage(g_img))return -1;
-    unsigned char max_t=0;
     for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
         //g_mu[i]=0.1f*g_img[i]+0.9f*g_mu[i];
         #define IIR_MU_RATE 3
+        #define IIR_MU_RATE_L 1
         g_mu[i]= (IIR_MU_RATE*16*g_img[i]+(16-IIR_MU_RATE)*g_mu[i])/16;
         int sig=1;
         float t=g_img[i]-g_mu[i]/16;
         if(t<0)sig=-1;
         t*=t;
+        //t=sqrt(t);
         //too high t must be ignored ???
         if(0 && t>g_v[i]*16){
         }else{
             if(t>g_v[i]){
-                g_v[i]=t*0.05f+0.95f*g_v[i];
+                //g_v[i]=t*0.05f+0.95f*g_v[i];
+                g_v[i]= min(16*255, (IIR_MU_RATE_L*16*t+(16-IIR_MU_RATE_L)*g_v[i])/16);
+        
             }else{
-                g_v[i]=t*0.1f+0.9f*g_v[i];
+                //g_v[i]=t*0.1f+0.9f*g_v[i];
+                g_v[i]= min(16*255,(IIR_MU_RATE*16*t+(16-IIR_MU_RATE)*g_v[i])/16);
             }
         }
-        t=t/(0.01f+g_v[i]);
-        g_s[i]=min(128,max(-128,sig*t));
-        max_t=max(t,max_t);
+        t=16*t/(0.5f+g_v[i]);
+        g_s[i]=sig*min(127,t);
     }
     short max_s=0;
     const int  win=5;
@@ -149,6 +179,5 @@ unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,short *out_max_s
             max_s=max(fabs(max_s),s);
         }
     }
-    if(out_max_s) *out_max_s =max_s;
-    return  max_s>140?1:0;
+    return max_s;
 }
