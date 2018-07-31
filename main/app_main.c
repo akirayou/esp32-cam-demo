@@ -158,7 +158,6 @@ bool main_loop(void){
 
     uint8_t isDetect=0;
     cameraLock();
-    gpio_set_level(CAMERA_LED_GPIO, 1);
     camera_sleep(0);
     for(int i=0;i<2;i++)wait_vsync();//skip 2frames to get sable frame
 
