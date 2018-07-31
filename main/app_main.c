@@ -83,6 +83,72 @@ void cameraUnlock(){
     xSemaphoreGive(_cameraLock);
 }
 
+
+
+
+
+#include "esp_http_client.h"
+#define MAX_HTTP_RECV_BUFFER 100
+
+esp_err_t _http_event_handler(esp_http_client_event_t *evt)
+{
+    switch(evt->event_id) {
+        case HTTP_EVENT_ERROR:
+            ESP_LOGD(TAG, "HTTP_EVENT_ERROR");
+            break;
+        case HTTP_EVENT_ON_CONNECTED:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_CONNECTED");
+            break;
+        case HTTP_EVENT_HEADER_SENT:
+            ESP_LOGD(TAG, "HTTP_EVENT_HEADER_SENT");
+            break;
+        case HTTP_EVENT_ON_HEADER:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
+            break;
+        case HTTP_EVENT_ON_DATA:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+            if (!esp_http_client_is_chunked_response(evt->client)) {
+                // Write out data
+                // printf("%.*s", evt->data_len, (char*)evt->data);
+            }
+
+            break;
+        case HTTP_EVENT_ON_FINISH:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_FINISH");
+            break;
+        case HTTP_EVENT_DISCONNECTED:
+            ESP_LOGD(TAG, "HTTP_EVENT_DISCONNECTED");
+            break;
+    }
+    return ESP_OK;
+}
+
+
+
+void http_post(uint8_t *data,size_t len,short max_s){
+    
+     esp_http_client_config_t config = {
+        .url = CONFIG_UPLOAD_URL ,
+        .event_handler = _http_event_handler,
+        .method = HTTP_METHOD_POST,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    char strBuf[10];
+    sprintf(strBuf,"%d",max_s);
+    esp_http_client_set_header(client, "Content-Type", "application/octet-stream");
+    esp_http_client_set_header(client, "X-MaxS", strBuf);
+    esp_http_client_set_post_field(client, (char*)data, len);
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "HTTP POST Status = %d, content_length = %d",
+                esp_http_client_get_status_code(client),
+                esp_http_client_get_content_length(client));
+    } else {
+        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
+    }
+    esp_http_client_cleanup(client);
+}
+
 bool main_loop(void){
     static TickType_t lastTick=0;
     TickType_t tickFromLast=xTaskGetTickCount()-lastTick;
@@ -105,11 +171,12 @@ bool main_loop(void){
         uint8_t *jpgData = camera_get_fb();
         size_t jpgSize = camera_get_data_size();
         short max_s;
-        isDetect=detect_move(jpgData,jpgSize,&max_s);
+        isDetect=detect_move(jpgData,jpgSize,&max_s); 
         ESP_LOGI(TAG,"Detect: max_s %d",max_s);
-    }
-    if(isDetect){
-        ESP_LOGI(TAG,"Move !\n");
+        if(isDetect){
+            ESP_LOGI(TAG,"Move !\n");
+            http_post(jpgData,jpgSize,max_s);
+        }
     }
     cameraUnlock();
 
@@ -231,7 +298,6 @@ static esp_err_t write_frame(http_context_t http_ctx)
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
     cameraLock();
-    gpio_set_level(CAMERA_LED_GPIO, 1);
     camera_sleep(0);
     for(int i=0;i<2;i++)wait_vsync();//skip 2frames to get sable frame
 
@@ -245,9 +311,9 @@ static void handle_jpg(http_context_t http_ctx, void* ctx)
         http_response_set_header(http_ctx, "Content-disposition", "inline; filename=capture.jpg");
         write_frame(http_ctx);
         http_response_end(http_ctx);
-        gpio_set_level(CAMERA_LED_GPIO, 0);
     }
     cameraUnlock();
+
 }
 
 static void handle_jpg_stream(http_context_t http_ctx, void* ctx)

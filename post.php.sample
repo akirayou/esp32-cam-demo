@@ -1,0 +1,14 @@
+<?php
+$jpg = file_get_contents( 'php://input' );
+$ip= $_SERVER["REMOTE_ADDR"] ;
+$stamp=date("Ymd_His");
+$max_s=$_SERVER['HTTP_X_MAXS'];
+$file="up/".$ip."_".$stamp."_".$max_s.".jpg";
+$fp=fopen($file,"w");
+fwrite($fp,$jpg);
+fclose($fp);
+
+
+echo "ok"
+?>
+

@@ -1,5 +1,12 @@
 menu "ESP32 Camera Demo Configuration"
 
+
+config UPLOAD_URL
+    string "Upload URL"
+    default "http://192.168.1.1/post.php"
+    help
+	upload jpg file when move deteciton 
+
 choice ESP_WIFI_MODE
     prompt "AP or STA"
     default ESP_WIFI_IS_SOFTAP
