@@ -96,9 +96,9 @@ static int decodeToImage(unsigned char *pImage)
     return 0;
 }
 unsigned char g_img[F_WIDTH * F_HEIGHT];
-static char g_s[F_WIDTH * F_HEIGHT];// 4  * sigma ** 2  value,it Means 256=  8 sigma
-static char g_mu[F_WIDTH * F_HEIGHT];
-static char g_v[F_WIDTH * F_HEIGHT];
+static signed char g_s[F_WIDTH * F_HEIGHT];//  sigma ** 2  value,it Means 128=  +/- 11 sigma
+static short g_mu[F_WIDTH * F_HEIGHT];//average of  g_img*16 value    
+static float g_v[F_WIDTH * F_HEIGHT];
 void detect_move_init(void)
 {
 
@@ -107,7 +107,7 @@ void detect_move_init(void)
         g_v[i]=10;
     }
 }
-unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,float *out_max_s)
+unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,short *out_max_s)
 {
     g_nInFileOfs = 0;
     g_nInFileSize=jpgSize;
@@ -116,12 +116,14 @@ unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,float *out_max_s
     if(decodeToImage(g_img))return -1;
     unsigned char max_t=0;
     for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
-        g_mu[i]=0.1f*g_img[i]+0.9f*g_mu[i];
+        //g_mu[i]=0.1f*g_img[i]+0.9f*g_mu[i];
+        #define IIR_MU_RATE 3
+        g_mu[i]= (IIR_MU_RATE*16*g_img[i]+(16-IIR_MU_RATE)*g_mu[i])/16;
         int sig=1;
-        float t=g_img[i]-g_mu[i];
+        float t=g_img[i]-g_mu[i]/16;
         if(t<0)sig=-1;
         t*=t;
-        //too high g_v must be ignored
+        //too high t must be ignored ???
         if(0 && t>g_v[i]*16){
         }else{
             if(t>g_v[i]){
@@ -131,14 +133,14 @@ unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,float *out_max_s
             }
         }
         t=t/(0.01f+g_v[i]);
-        g_s[i]=sig*t;
+        g_s[i]=min(128,max(-128,sig*t));
         max_t=max(t,max_t);
     }
-    float max_s=0;
+    short max_s=0;
     const int  win=5;
     for(int y=0;y<F_HEIGHT-win;y+=2){
         for(int x=0;x<F_WIDTH-win;x+=2){
-            float s=0;
+            short s=0;
             for(int yd=0;yd<win;yd++){
                 for(int xd=0;xd<win;xd++){
                     s+=g_s[(y+yd)*F_HEIGHT+x+xd];

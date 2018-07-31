@@ -2,7 +2,7 @@
 #define MOVE_DETECT_H
 #include <stdio.h>
 void detect_move_init(void);
-unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,float *out_max_s);
+unsigned char detect_move(unsigned char *jpgData,size_t jpgSize,short *out_max_s);
 
 //decoded image size /8
 #define F_WIDTH 100

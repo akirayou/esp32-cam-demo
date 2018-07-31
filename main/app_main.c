@@ -72,7 +72,16 @@ static camera_pixelformat_t s_pixel_format;
 
 #define CAMERA_PIXEL_FORMAT CAMERA_PF_GRAYSCALE
 #define CAMERA_FRAME_SIZE CAMERA_FS_SVGA
-static portMUX_TYPE cameraMutex = portMUX_INITIALIZER_UNLOCKED;
+static xSemaphoreHandle _cameraLock =NULL;
+void cameraLockInit(){
+    vSemaphoreCreateBinary(_cameraLock);
+}
+void cameraLock(){
+    xSemaphoreTake(_cameraLock,portMAX_DELAY);
+}
+void cameraUnlock(){
+    xSemaphoreGive(_cameraLock);
+}
 
 bool main_loop(void){
     static TickType_t lastTick=0;
@@ -81,9 +90,8 @@ bool main_loop(void){
     TickType_t waitTick=1000/portTICK_PERIOD_MS-tickFromLast;
     if(waitTick<1000/portTICK_PERIOD_MS)vTaskDelay(waitTick);
 
-    /*
     uint8_t isDetect=0;
-    taskENTER_CRITICAL(&cameraMutex);
+    cameraLock();
     gpio_set_level(CAMERA_LED_GPIO, 1);
     camera_sleep(0);
     for(int i=0;i<2;i++)wait_vsync();//skip 2frames to get sable frame
@@ -96,12 +104,14 @@ bool main_loop(void){
         camera_sleep(1);
         uint8_t *jpgData = camera_get_fb();
         size_t jpgSize = camera_get_data_size();
-        float max_s;
+        short max_s;
         isDetect=detect_move(jpgData,jpgSize,&max_s);
-        ESP_LOGI(TAG,"Detect: max_s %f",max_s);
+        ESP_LOGI(TAG,"Detect: max_s %d",max_s);
     }
-    taskEXIT_CRITICAL(&cameraMutex);
-*/
+    if(isDetect){
+        ESP_LOGI(TAG,"Move !\n");
+    }
+    cameraUnlock();
 
     return true;
 }
@@ -110,6 +120,7 @@ void app_main()
 {
     esp_log_level_set("wifi", ESP_LOG_WARN);
     esp_log_level_set("gpio", ESP_LOG_WARN);
+    cameraLockInit();
 
     esp_err_t err = nvs_flash_init();
     if (err != ESP_OK) {
@@ -219,7 +230,7 @@ static esp_err_t write_frame(http_context_t http_ctx)
 
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
-    //taskENTER_CRITICAL(&cameraMutex);
+    cameraLock();
     gpio_set_level(CAMERA_LED_GPIO, 1);
     camera_sleep(0);
     for(int i=0;i<2;i++)wait_vsync();//skip 2frames to get sable frame
@@ -236,12 +247,12 @@ static void handle_jpg(http_context_t http_ctx, void* ctx)
         http_response_end(http_ctx);
         gpio_set_level(CAMERA_LED_GPIO, 0);
     }
-    //taskEXIT_CRITICAL(&cameraMutex);
+    cameraUnlock();
 }
 
 static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
 {
-    taskENTER_CRITICAL(&cameraMutex);
+    cameraLock();
     //gpio_set_level(CAMERA_LED_GPIO, 1);
     http_response_begin(http_ctx, 200, STREAM_CONTENT_TYPE, HTTP_RESPONSE_SIZE_UNKNOWN);
     camera_sleep(0);
@@ -268,8 +279,7 @@ static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
     }
     http_response_end(http_ctx);
     camera_sleep(1);
-    taskEXIT_CRITICAL(&cameraMutex);
-
+    cameraUnlock();
     //gpio_set_level(CAMERA_LED_GPIO, 0);
 }
 
