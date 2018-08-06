@@ -1,7 +1,6 @@
 #ifndef MOVE_DETECT_H
 #define MOVE_DETECT_H
 #include <stdio.h>
-#include "esp_log.h"
 void detect_move_init(void);
 unsigned short detect_move(unsigned char *jpgData,size_t jpgSize);
 

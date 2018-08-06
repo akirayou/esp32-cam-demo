@@ -1,9 +1,18 @@
 #include "fjpeg.h"
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <math.h>
 #include "move_detect.h"
 const char *TAG="move_detect";
+#if 1
+#include "esp_log.h"
+#else
+#include <stdio.h>
+#define ESP_LOGI(t,...)  do{fprintf(stderr,__VA_ARGS__);}while(0)
+#define ESP_LOGE(t,...)  do{fprintf(stderr,__VA_ARGS__);}while(0)
+#endif
+
 #ifndef max
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
@@ -32,10 +41,10 @@ static int decodeToImage(unsigned char *pImage)
     status = fjpeg_decode_init(&image_info, pjpeg_need_bytes_callback, 0);
     if (status)
     {
-        //printf("pjpeg_decode_init() failed with status %u\n", status);
+        ESP_LOGE(TAG,"pjpeg_decode_init() failed with status %u\n", status);
         if (status == FJPG_UNSUPPORTED_MODE)
         {
-            //printf("Progressive JPEG files are not supported.\n");
+            ESP_LOGE(TAG,"Progressive JPEG files are not supported.\n");
         }
         return -1;
     }
@@ -58,7 +67,7 @@ static int decodeToImage(unsigned char *pImage)
         {
             if (status != FJPG_NO_MORE_BLOCKS)
             {
-                //printf("pjpeg_decode_mcu() failed with status %u\n", status);
+                ESP_LOGE(TAG,"pjpeg_decode_mcu() failed with status %u\n", status);
                 return -1;
             }
             break;
@@ -139,11 +148,11 @@ unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
     g_nInFileOfs = 0;
     g_nInFileSize=jpgSize;
     g_jpgData=jpgData;
-
-    if(decodeToImage(g_img))return -1;
+    const float E_g_v=16.0f;
+    if(decodeToImage(g_img))return 0;
     for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
         //g_mu[i]=0.1f*g_img[i]+0.9f*g_mu[i];
-        #define IIR_MU_RATE 3
+        #define IIR_MU_RATE 2
         #define IIR_MU_RATE_L 1
         g_mu[i]= (IIR_MU_RATE*16*g_img[i]+(16-IIR_MU_RATE)*g_mu[i])/16;
         int sig=1;
@@ -163,11 +172,11 @@ unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
                 g_v[i]= min(16*255,(IIR_MU_RATE*16*t+(16-IIR_MU_RATE)*g_v[i])/16);
             }
         }
-        t=16*t/(0.5f+g_v[i]);
+        t=16*t/(E_g_v+g_v[i]);
         g_s[i]=sig*min(127,t);
     }
-    short max_s=0;
-    const int  win=5;
+    unsigned short max_s=0;
+    const int  win=4;
     for(int y=0;y<F_HEIGHT-win;y+=2){
         for(int x=0;x<F_WIDTH-win;x+=2){
             short s=0;
@@ -179,5 +188,7 @@ unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
             max_s=max(fabs(max_s),s);
         }
     }
+
+
     return max_s;
 }

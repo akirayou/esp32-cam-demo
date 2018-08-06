@@ -34,7 +34,7 @@
 #include "bitmap.h"
 #include "http_server.h"
 #include "move_detect.h"
-#define USE_SLEEP 0
+#define USE_SLEEP 1
 /* The examples use simple WiFi configuration that you can set via
    'make menuconfig'.
 
@@ -288,7 +288,7 @@ void app_main()
 
     
     detect_move_init();
-    
+    vTaskPrioritySet(0,20);
     while(main_loop());
 
 }
