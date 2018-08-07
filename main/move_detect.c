@@ -108,8 +108,9 @@ static int decodeToImage(unsigned char *pImage)
 
 unsigned char *g_img;
 static signed char *g_s;//  sigma ** 2  value,it Means 128=  +/- 11 sigma
-static unsigned short *g_mu;//average of  g_img*16 value    
+static unsigned short *g_mu;//average of  g_img*256 value    
 static unsigned short *g_v;// variance*16
+static char at1st=1;
 void detect_move_init(void)
 {
     ESP_LOGI(TAG,"alloc memory");
@@ -121,12 +122,8 @@ void detect_move_init(void)
     if(!g_mu)ESP_LOGE(TAG,"malloc g_mu");
     g_v =malloc(F_WIDTH*F_HEIGHT*sizeof(short));
     if(!g_v)ESP_LOGE(TAG,"malloc g_v");
-    
+    at1st=1;
 
-    for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
-        g_mu[i]=g_img[i];
-        g_v[i]=30*16;
-    }
 }
 
 unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
@@ -134,37 +131,34 @@ unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
     g_nInFileOfs = 0;
     g_nInFileSize=jpgSize;
     g_jpgData=jpgData;
-    const float E_g_v=16.0f;
     if(decodeToImage(g_img))return 0;
+    if(at1st){
+        at1st=0;   
+        for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
+            g_mu[i]=g_img[i];
+            g_v[i]=30*16;
+        }
+    }
     for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
         //g_mu[i]=0.1f*g_img[i]+0.9f*g_mu[i];
-        #define IIR_MU_RATE 1
-        #define IIR_MU_RATE_L 1
-        g_mu[i]= (IIR_MU_RATE*16*g_img[i]+(16-IIR_MU_RATE)*g_mu[i])/16;
+        #define IIR_MU_RATE 0.05f
+        #define IIR_V_RATE 0.05f
+        g_mu[i]= IIR_MU_RATE*256.0f*g_img[i] + (1.0f-IIR_MU_RATE)*g_mu[i];
         int sig=1;
-        float t=g_img[i]-g_mu[i]/16;
+        float t=g_img[i]-g_mu[i]/256.0f;
         if(t<0)sig=-1;
-        t*=t;
-        //t=sqrt(t);
-        //too high t must be ignored ???
-        if(0 && t>g_v[i]*16){
-        }else{
-            if(t>g_v[i]){
-                //g_v[i]=t*0.05f+0.95f*g_v[i];
-                g_v[i]= min(16*255, (IIR_MU_RATE_L*16*t+(16-IIR_MU_RATE_L)*g_v[i])/16);
-        
-            }else{
-                //g_v[i]=t*0.1f+0.9f*g_v[i];
-                g_v[i]= min(16*255,(IIR_MU_RATE*16*t+(16-IIR_MU_RATE)*g_v[i])/16);
-            }
-        }
-        t=16*t/(E_g_v+g_v[i]);
-        g_s[i]=sig*min(127,t);
+        t*=t; //max of t is 255^2
+
+        g_v[i]=IIR_V_RATE*t + (1.0f-IIR_V_RATE)*g_mu[i];
+        //in case of 5 sigma, t/g_v is 25,  
+        const float E_g_v=16.0f;
+        t=t/(E_g_v+g_v[i]);
+        g_s[i]=sig*min(127,t*5); //25*5=125 is aprox maximum sigma  , 1sigma = 5 ,2sigma =20, 3sigma=45,4sigma=80,5simga=125
     }
     unsigned short max_s=0;
     const int  win=3;
-    for(int y=0;y<F_HEIGHT-win;y+=2){
-        for(int x=0;x<F_WIDTH-win;x+=2){
+    for(int y=0;y<F_HEIGHT-win;y+=1){
+        for(int x=0;x<F_WIDTH-win;x+=1){
             short s=0;
             for(int yd=0;yd<win;yd++){
                 for(int xd=0;xd<win;xd++){

@@ -7,11 +7,7 @@ config UPLOAD_URL
     help
 	upload jpg file when move deteciton 
 
-config MAX_S_THRESH
-    int "Max_S"
-    default 700
-    help
-	threshold of move detect.
+
 
 config STATIC_FB
     int "FB size(0 is by dynamic)"

@@ -46,7 +46,7 @@
 #define EXAMPLE_ESP_WIFI_PASS CONFIG_ESP_WIFI_PASSWORD
 #define EXAMPLE_MAX_STA_CONN CONFIG_MAX_STA_CONN
 #define CAMERA_LED_GPIO 16
-
+#define MAX_S_THRESH 100
 #if EXAMPLE_ESP_WIFI_MODE_AP
 static void wifi_init_softap(void);
 #else
@@ -187,7 +187,7 @@ bool main_loop(void){
         size_t jpgSize = camera_get_data_size();
         unsigned short max_s;
         max_s=detect_move(jpgData,jpgSize);
-        isDetect = max_s>CONFIG_MAX_S_THRESH; 
+        isDetect = max_s>MAX_S_THRESH; 
         ESP_LOGI(TAG,"Detect: max_s %d",max_s);
         if(isDetect){
             ESP_LOGI(TAG,"Move !\n");
