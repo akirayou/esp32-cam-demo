@@ -34,7 +34,7 @@
 #include "bitmap.h"
 #include "http_server.h"
 #include "move_detect.h"
-#define USE_SLEEP 1
+#define USE_SLEEP 0
 /* The examples use simple WiFi configuration that you can set via
    'make menuconfig'.
 
@@ -52,8 +52,11 @@ static void wifi_init_softap(void);
 #else
 static void wifi_init_sta(void);
 #endif 
+static void cameraStop();
+static void cameraStart();
 
 static void handle_jpg(http_context_t http_ctx, void* ctx);
+static void handle_reset(http_context_t http_ctx, void* ctx);
 static void handle_jpg_stream(http_context_t http_ctx, void* ctx);
 static esp_err_t event_handler(void *ctx, system_event_t *event);
 
@@ -150,11 +153,18 @@ void http_post(uint8_t *data,size_t len,short max_s){
 }
 
 bool main_loop(void){
+    static int count=0;
     static TickType_t lastTick=0;
     TickType_t tickFromLast=xTaskGetTickCount()-lastTick;
     lastTick=xTaskGetTickCount();
-    TickType_t waitTick=1000/portTICK_PERIOD_MS-tickFromLast;
+    TickType_t waitTick=100/portTICK_PERIOD_MS-tickFromLast;
     if(waitTick<1000/portTICK_PERIOD_MS)vTaskDelay(waitTick);
+    count++;
+    if(count>60*5){
+        count=0;
+        cameraStop();
+        cameraStart();
+    }
 
     uint8_t isDetect=0;
     cameraLock();
@@ -165,6 +175,7 @@ bool main_loop(void){
     esp_err_t err = camera_run();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Camera capture failed with error = %d", err);
+        esp_restart();
 #if USE_SLEEP
         camera_sleep(1);
 #endif
@@ -187,23 +198,12 @@ bool main_loop(void){
 
     return true;
 }
-
-void app_main()
-{
-    esp_log_level_set("wifi", ESP_LOG_WARN);
-    esp_log_level_set("gpio", ESP_LOG_WARN);
-    cameraLockInit();
-
-    esp_err_t err = nvs_flash_init();
-    if (err != ESP_OK) {
-        ESP_ERROR_CHECK( nvs_flash_erase() );
-        ESP_ERROR_CHECK( nvs_flash_init() );
-    }
-
-    ESP_ERROR_CHECK(gpio_install_isr_service(0));
-    gpio_set_direction(CAMERA_LED_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(CAMERA_LED_GPIO, 1);
-
+static void cameraStop(){
+    cameraLock();
+    camera_deinit();
+}
+static void cameraStart(){
+    esp_err_t err;
     camera_config_t camera_config = {
         .ledc_channel = LEDC_CHANNEL_0,
         .ledc_timer = LEDC_TIMER_0,
@@ -255,22 +255,36 @@ void app_main()
         ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
         return;
     }
-  
+    assert(s_pixel_format == CAMERA_PF_JPEG);
+    for(int i=0;i<10;i++)wait_vsync();//skip soe frames to get sable frame
+#if USE_SLEEP
+    camera_sleep(1); 
+#endif
+    cameraUnlock();
+}
+
+void app_main()
+{
+    esp_log_level_set("wifi", ESP_LOG_WARN);
+    esp_log_level_set("gpio", ESP_LOG_WARN);
+    esp_err_t err;
+    err = nvs_flash_init();
+    if (err != ESP_OK) {
+        ESP_ERROR_CHECK( nvs_flash_erase() );
+        ESP_ERROR_CHECK( nvs_flash_init() );
+    }
+    ESP_ERROR_CHECK(gpio_install_isr_service(0));
+    gpio_set_direction(CAMERA_LED_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(CAMERA_LED_GPIO, 1);
+    cameraLockInit();
+    cameraStart();
+
 #if EXAMPLE_ESP_WIFI_MODE_AP
     ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
     wifi_init_softap();
 #else
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
-#endif
-
-    //Some lead-in  time  is needed,to get stable image.
-    //Camera's gain controller needs about 30 frames.
-    //So I use Wifi-connection time as lead-in time.
-    assert(s_pixel_format == CAMERA_PF_JPEG);
-    for(int i=0;i<10;i++)wait_vsync();//skip soe frames to get sable frame
-#if USE_SLEEP
-    camera_sleep(1); 
 #endif
     http_server_t server;
     http_server_options_t http_options = HTTP_SERVER_OPTIONS_DEFAULT();
@@ -280,6 +294,8 @@ void app_main()
 
     ESP_ERROR_CHECK( http_register_handler(server, "/jpg", HTTP_GET, HTTP_HANDLE_RESPONSE, &handle_jpg, NULL) );
     ESP_LOGI(TAG, "Open http://" IPSTR "/jpg for single image/jpg image", IP2STR(&s_ip_addr));
+    ESP_ERROR_CHECK( http_register_handler(server, "/reset", HTTP_GET, HTTP_HANDLE_RESPONSE, &handle_reset, NULL) );
+    ESP_LOGI(TAG, "Open http://" IPSTR "/reset for reset camera", IP2STR(&s_ip_addr));
     ESP_ERROR_CHECK( http_register_handler(server, "/jpg_stream", HTTP_GET, HTTP_HANDLE_RESPONSE, &handle_jpg_stream, NULL) );
     ESP_LOGI(TAG, "Open http://" IPSTR "/jpg_stream for multipart/x-mixed-replace stream of JPEGs", IP2STR(&s_ip_addr));
     ESP_ERROR_CHECK( http_register_handler(server, "/", HTTP_GET, HTTP_HANDLE_RESPONSE, &handle_jpg_stream, NULL) );
@@ -305,7 +321,17 @@ static esp_err_t write_frame(http_context_t http_ctx)
     };
     return http_response_write(http_ctx, &fb_data);
 }
-
+static void handle_reset(http_context_t http_ctx, void* ctx)
+{
+    cameraStop();
+    cameraStart();
+        http_buffer_t fb_data = {
+            .data = "reset done",
+            .size = 10,
+            .data_is_persistent = true
+    };
+    http_response_write(http_ctx, &fb_data);
+}
 static void handle_jpg(http_context_t http_ctx, void* ctx)
 {
     cameraLock();
@@ -337,12 +363,16 @@ static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
     cameraLock();
     //gpio_set_level(CAMERA_LED_GPIO, 1);
     http_response_begin(http_ctx, 200, STREAM_CONTENT_TYPE, HTTP_RESPONSE_SIZE_UNKNOWN);
+#if USE_SLEEP
     camera_sleep(0);
+#endif
     while (true) {
         esp_err_t err = camera_run();
         if (err != ESP_OK) {
             ESP_LOGD(TAG, "Camera capture failed with error = %d", err);
+#if USE_SLEEP
             camera_sleep(1);
+#endif
             break;
         }
         err = http_response_begin_multipart(http_ctx, "image/jpg",
@@ -360,7 +390,9 @@ static void handle_jpg_stream(http_context_t http_ctx, void* ctx)
         }
     }
     http_response_end(http_ctx);
+#if USE_SLEEP
     camera_sleep(1);
+#endif
     cameraUnlock();
     //gpio_set_level(CAMERA_LED_GPIO, 0);
 }

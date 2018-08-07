@@ -105,20 +105,7 @@ static int decodeToImage(unsigned char *pImage)
     }
     return 0;
 }
-#if 0
-unsigned char g_img[F_WIDTH * F_HEIGHT];
-static signed char g_s[F_WIDTH * F_HEIGHT];//  sigma ** 2  value,it Means 128=  +/- 11 sigma
-static unsigned short g_mu[F_WIDTH * F_HEIGHT];//average of  g_img*16 value    
-static unsigned short g_v[F_WIDTH * F_HEIGHT];
-void detect_move_init(void)
-{
 
-    for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
-        g_mu[i]=g_img[i];
-        g_v[i]=10;
-    }
-}
-#else 
 unsigned char *g_img;
 static signed char *g_s;//  sigma ** 2  value,it Means 128=  +/- 11 sigma
 static unsigned short *g_mu;//average of  g_img*16 value    
@@ -138,11 +125,10 @@ void detect_move_init(void)
 
     for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
         g_mu[i]=g_img[i];
-        g_v[i]=10*16;
+        g_v[i]=30*16;
     }
 }
 
-#endif
 unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
 {
     g_nInFileOfs = 0;
@@ -152,7 +138,7 @@ unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
     if(decodeToImage(g_img))return 0;
     for(int i=0;i<F_WIDTH*F_HEIGHT;i++){
         //g_mu[i]=0.1f*g_img[i]+0.9f*g_mu[i];
-        #define IIR_MU_RATE 2
+        #define IIR_MU_RATE 1
         #define IIR_MU_RATE_L 1
         g_mu[i]= (IIR_MU_RATE*16*g_img[i]+(16-IIR_MU_RATE)*g_mu[i])/16;
         int sig=1;
@@ -176,7 +162,7 @@ unsigned short detect_move(unsigned char *jpgData,size_t jpgSize)
         g_s[i]=sig*min(127,t);
     }
     unsigned short max_s=0;
-    const int  win=4;
+    const int  win=3;
     for(int y=0;y<F_HEIGHT-win;y+=2){
         for(int x=0;x<F_WIDTH-win;x+=2){
             short s=0;
