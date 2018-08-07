@@ -28,7 +28,7 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "nvs_flash.h"
-
+#include "esp_task_wdt.h"
 #include "driver/gpio.h"
 #include "camera.h"
 #include "bitmap.h"
@@ -167,7 +167,8 @@ bool main_loop(void){
     }
 
     uint8_t isDetect=0;
-    cameraLock();
+    cameraLock();//Yes jpeg_stream can make wdt reset by this Lock, Useful for test
+    esp_task_wdt_reset();
 #if USE_SLEEP
     camera_sleep(0);
     for(int i=0;i<2;i++)wait_vsync();//skip some frames to get sable frame
@@ -265,6 +266,8 @@ static void cameraStart(){
 
 void app_main()
 {
+    esp_task_wdt_init(10,true);
+    esp_task_wdt_add(NULL);
     esp_log_level_set("wifi", ESP_LOG_WARN);
     esp_log_level_set("gpio", ESP_LOG_WARN);
     esp_err_t err;
